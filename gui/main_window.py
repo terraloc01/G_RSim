@@ -249,6 +249,15 @@ class MainWindow(QMainWindow):
         # --- 실행 ---
         grp_run = QGroupBox("시뮬레이션")
         v = QVBoxLayout(grp_run)
+        eng_row = QFormLayout()
+        self._cmb_engine = QComboBox()
+        self._cmb_engine.addItem("gprMax (FDTD 정밀, 분 단위)", "fdtd")
+        self._cmb_engine.addItem("레이트레이싱 (근사, 1초 미만)", "ray")
+        eng_row.addRow("엔진:", self._cmb_engine)
+        v.addLayout(eng_row)
+        self._chk_multiples = QCheckBox("다중반사 (RR) 포함 — 레이트레이싱 전용")
+        self._chk_multiples.setEnabled(False)
+        v.addWidget(self._chk_multiples)
         self._lbl_info = QLabel("")
         self._lbl_info.setWordWrap(True)
         v.addWidget(self._lbl_info)
@@ -291,6 +300,8 @@ class MainWindow(QMainWindow):
         self._lst_objects.currentRowChanged.connect(self._on_list_selected)
         self._btn_run.clicked.connect(self._on_run)
         self._btn_cancel.clicked.connect(self._on_cancel)
+        self._cmb_engine.currentIndexChanged.connect(
+            lambda _: self._chk_multiples.setEnabled(self._cmb_engine.currentData() == "ray"))
         return panel
 
     # ------------------------------------------------------------ 모델 동기화
@@ -492,6 +503,20 @@ class MainWindow(QMainWindow):
             kr_warn(self, "모델 검증", "\n".join(errs))
             return
         n = self._model.n_traces()
+
+        # ---- 레이트레이싱 엔진: 즉시 계산 ----
+        if self._cmb_engine.currentData() == "ray":
+            from engine.raytrace import simulate_raytrace
+            data, dt = simulate_raytrace(self._model,
+                                         include_multiples=self._chk_multiples.isChecked())
+            a = self._model.antenna
+            self._bscan.set_data(data, dt, a.x_start + a.offset / 2.0, a.step,
+                                 self._model.background.epsilon_r)
+            self._tabs.setCurrentWidget(self._bscan)
+            self._prg.setRange(0, 1)
+            self._prg.setValue(1)
+            self._lbl_status.setText("완료 (레이트레이싱)")
+            return
         nx = int(self._model.width / self._model.cell)
         ny = int((self._model.depth + self._model.air_height) / self._model.cell)
         if nx * ny * n > 50_000_000:  # 대략적 경고 기준

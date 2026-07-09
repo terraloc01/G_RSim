@@ -8,7 +8,10 @@
 > - **엔진 = gprMax 3.1.7 (FDTD)** 연동 (세중님 결정, 레이트레이싱 아님).
 > - **시즌01 MVP 완성**: 모델빌더 + B-scan 시뮬레이션/뷰어. 엔진 end-to-end
 >   물리검증(금속관 하이퍼볼라 + 깊이 환산 일치) + GUI 오프스크린 스모크 통과.
-> - 🔲 **세중님 실기동 검증 대기** (run.bat 실행 -> 그리기 -> 시뮬레이션 -> B-scan).
+> - **세중님 실기동 검증 완료**: 예제/자작(원2개) 모델 FDTD 실행 성공, "좋은데" 평.
+>   FDTD 5분 소요는 수용 ("결과만 좋다면 기다릴 수 있어").
+> - **★이중 엔진**: 세중님 요청으로 레이트레이싱(GPRSIM 방식) 추가 — 엔진 콤보
+>   (gprMax FDTD / 레이트레이싱) + 다중반사(RR) 옵션. G_OhmA PyGIMLi/R2 패턴.
 
 ## 실행
 
@@ -43,6 +46,10 @@ core/model.py          Material(프리셋 13종)/LayerObject/BoxObject/CylinderO
                        권장 셀 λmin/10, n_traces)
 engine/gprmax_writer.py  GPRModel -> gprMax .in 생성 (2D TMz, y=depth-d 변환,
                        painting 순서: 배경->층->사각->원. air/pec 은 내장 재질)
+engine/raytrace.py     ★레이트레이싱 엔진 (GPRSIM 방식 근사, <1초) — 직접파/
+                       원(점회절)/사각(상면반사+모서리회절)/층(R, 옵션 RR 다중반사).
+                       층별 슬로우니스 적분 주시 + σ 감쇠. 한계: 링잉/객체상호작용 없음.
+                       세중님 원2개 모델서 FDTD 정점주시 정합 확인(13/25ns)
 engine/gprmax_runner.py  서브프로세스 실행(python -m gprMax, 진행 콜백
                        '--- Model n/N' 파싱, 취소), .out(HDF5) 취합 read_bscan
 gui/style.py           G_UI_Catalog 표준: 공통 QSS + 한글 메시지박스(kr_info/warn/question)
