@@ -142,9 +142,14 @@ class GPRModel:
         return max(best, 0.001)
 
     def auto_antenna_range(self) -> tuple:
-        """PML(10셀) + 여유 2셀을 피한 측선 전체 스캔 범위 (x_start, x_end)."""
+        """PML(10셀)+여유 2셀을 피한 측선 전체 스캔 범위 (x_start, x_end).
+
+        우측 여유는 trace 간격 이상 확보 — gprMax 가 스텝 위치를
+        n스텝(실제 최종은 n-1스텝)으로 보수 검사하는 것에 대응.
+        """
         margin = 12 * self.cell
-        return (round(margin, 3), round(self.width - margin, 3))
+        margin_r = max(margin, self.antenna.step)
+        return (round(margin, 3), round(self.width - margin_r, 3))
 
     def n_traces(self) -> int:
         a = self.antenna
@@ -169,6 +174,10 @@ class GPRModel:
             errs.append(f"안테나 끝 위치가 PML 영역과 겹칩니다 (최대 {self.width - pml - self.cell:.2f}m).")
         if self.air_height < pml + 2 * self.cell:
             errs.append(f"공기층이 너무 얇습니다 (최소 {pml + 2 * self.cell:.2f}m = PML 10셀 + 여유).")
+        n = self.n_traces()
+        if n >= 1 and a.x_start + a.offset + a.step * n > self.width + 1e-9:
+            errs.append("스캔 스텝이 측선 끝을 넘습니다 (gprMax 는 n스텝 기준으로 검사). "
+                        "끝 위치나 trace 간격을 줄이세요.")
         suggested = self.suggest_cell()
         if self.cell > suggested * 1.5:
             errs.append(f"셀 {self.cell*100:.1f}cm 가 권장값 {suggested*100:.1f}cm 보다 큽니다 (수치분산 우려).")

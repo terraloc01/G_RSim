@@ -16,6 +16,15 @@ import numpy as np
 _RE_MODEL = re.compile(r"---\s*Model\s+(\d+)\s*/\s*(\d+)")
 
 
+def _python_exe() -> str:
+    """gprMax 가 설치된 전용 venv python 우선 (앱을 다른 python 으로 띄워도 안전)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    venv_py = os.path.join(root, ".venv", "Scripts", "python.exe")
+    if os.path.isfile(venv_py):
+        return venv_py
+    return sys.executable
+
+
 def run_simulation(in_path: str, n_traces: int, progress_cb=None, log_cb=None,
                    cancel_flag=None) -> bool:
     """gprMax 실행. progress_cb(current, total), log_cb(line) 콜백.
@@ -23,7 +32,7 @@ def run_simulation(in_path: str, n_traces: int, progress_cb=None, log_cb=None,
     cancel_flag: callable() -> bool, True 반환 시 프로세스 중단.
     반환값: 정상 완료 여부.
     """
-    cmd = [sys.executable, "-m", "gprMax", os.path.basename(in_path)]
+    cmd = [_python_exe(), "-m", "gprMax", os.path.basename(in_path)]
     if n_traces > 1:
         cmd += ["-n", str(n_traces)]
 
@@ -62,8 +71,12 @@ def read_bscan(in_path: str, n_traces: int, component: str = "Ez"):
     """실행 결과 .out 취합 → (data[iterations, n_traces], dt초).
 
     gprMax 명명 규약: n=1 → base.out, n>1 → base1.out ... baseN.out
+    GUI 프로세스에 h5py 가 없으면 venv python 에 위임 (npz 경유).
     """
-    import h5py
+    try:
+        import h5py
+    except ImportError:
+        return _read_bscan_delegate(in_path, n_traces, component)
 
     base = os.path.splitext(in_path)[0]
     if n_traces <= 1:
@@ -79,6 +92,35 @@ def read_bscan(in_path: str, n_traces: int, component: str = "Ez"):
             dt = float(f.attrs["dt"])
     data = np.column_stack(traces)
     return data, dt
+
+
+_DELEGATE_CODE = """
+import sys, os
+import numpy as np
+import h5py
+inp, n, comp = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+base = os.path.splitext(inp)[0]
+paths = [base + '.out'] if n <= 1 else [base + str(i) + '.out' for i in range(1, n + 1)]
+traces = []
+dt = 0.0
+for p in paths:
+    with h5py.File(p, 'r') as f:
+        traces.append(np.array(f['rxs/rx1/' + comp]))
+        dt = float(f.attrs['dt'])
+np.savez(base + '_bscan.npz', data=np.column_stack(traces), dt=dt)
+"""
+
+
+def _read_bscan_delegate(in_path: str, n_traces: int, component: str):
+    """h5py 취합을 venv python 서브프로세스로 수행하고 npz 로 회수."""
+    creation = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    subprocess.run(
+        [_python_exe(), "-c", _DELEGATE_CODE, in_path, str(n_traces), component],
+        check=True, capture_output=True, creationflags=creation,
+    )
+    npz_path = os.path.splitext(in_path)[0] + "_bscan.npz"
+    npz = np.load(npz_path)
+    return npz["data"], float(npz["dt"])
 
 
 def cleanup_outputs(in_path: str, n_traces: int) -> None:

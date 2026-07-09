@@ -2,6 +2,7 @@
 """G_RSim 메인 윈도우 — 모델 빌더 + gprMax 시뮬레이션 + B-scan 뷰어."""
 
 import os
+import time
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
@@ -33,25 +34,44 @@ class SimThread(QThread):
         self._in_path = in_path
         self._n = n_traces
         self._cancel = False
+        self._log = []
 
     def cancel(self):
         self._cancel = True
+
+    def _save_log(self):
+        log_path = os.path.join(os.path.dirname(self._in_path), "last_run.log")
+        try:
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(self._log))
+        except OSError:
+            pass
+        return log_path
+
+    def _collect(self, line):
+        self._log.append(line)
+        self.log_line.emit(line)
 
     def run(self):
         try:
             ok = run_simulation(
                 self._in_path, self._n,
                 progress_cb=lambda c, t: self.progress.emit(c, t),
-                log_cb=lambda s: self.log_line.emit(s),
+                log_cb=self._collect,
                 cancel_flag=lambda: self._cancel,
             )
+            log_path = self._save_log()
             if self._cancel:
                 self.done.emit(False, "취소됨")
             elif ok:
                 self.done.emit(True, "완료")
             else:
-                self.done.emit(False, "gprMax 비정상 종료 (로그 확인)")
+                tail = "\n".join(self._log[-6:]) if self._log else "(출력 없음)"
+                self.done.emit(False,
+                               f"gprMax 비정상 종료.\n\n--- 마지막 출력 ---\n{tail}\n\n"
+                               f"전체 로그: {log_path}")
         except Exception as exc:  # noqa: BLE001
+            self._save_log()
             self.done.emit(False, f"오류: {exc}")
 
 
@@ -489,6 +509,7 @@ class MainWindow(QMainWindow):
         self._btn_cancel.setEnabled(True)
         self._prg.setRange(0, n)
         self._prg.setValue(0)
+        self._t_run_start = time.time()
         self._lbl_status.setText(f"실행 중... (0/{n})")
 
         self._thread = SimThread(in_path, n, self)
@@ -498,7 +519,12 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, cur, total):
         self._prg.setValue(cur)
-        self._lbl_status.setText(f"실행 중... ({cur}/{total})")
+        txt = f"실행 중... ({cur}/{total})"
+        if cur >= 1:
+            elapsed = time.time() - self._t_run_start
+            remain = int(elapsed / cur * (total - cur))
+            txt += f"  남은 약 {remain // 60}분 {remain % 60:02d}초"
+        self._lbl_status.setText(txt)
 
     def _on_cancel(self):
         if self._thread is not None:
