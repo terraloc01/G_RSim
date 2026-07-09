@@ -43,8 +43,9 @@ engine/gprmax_writer.py  GPRModel -> gprMax .in 생성 (2D TMz, y=depth-d 변환
                        painting 순서: 배경->층->사각->원. air/pec 은 내장 재질)
 engine/gprmax_runner.py  서브프로세스 실행(python -m gprMax, 진행 콜백
                        '--- Model n/N' 파싱, 취소), .out(HDF5) 취합 read_bscan
-gui/main_window.py     좌측 패널(도메인/안테나/모델구성/실행) + 탭(모델/B-scan)
-                       SimThread(QThread) 로 비동기 실행
+gui/style.py           G_UI_Catalog 표준: 공통 QSS + 한글 메시지박스(kr_info/warn/question)
+gui/main_window.py     좌측 패널(도메인/안테나/모델구성/실행, QScrollArea+QSplitter L1)
+                       + 탭(모델/B-scan). SimThread(QThread) 로 비동기 실행
 gui/model_canvas.py    모델 캔버스 — 도구(선택/사각형/원형) 드래그 그리기,
                        클릭 선택, 층/객체 렌더, 안테나 스캔라인
 gui/bscan_widget.py    B-scan 뷰어 — 게인(원본/선형t/AGC), 컬러맵, 대비 clip,
@@ -90,6 +91,9 @@ external/gprMax/       gprMax 소스 clone (gitignore)
 
 상위 `C:\01_RnD\CLAUDE.md` 적용 — git 커밋 한국어, 맑은 고딕, 채팅전환 시
 CLAUDE.md+memory 갱신 후 커밋+push.
+- **UI 스타일 = `C:\01_RnD\G_UI_Catalog\G_UI_Catalog_v01.py` 준수** (세중님 지시):
+  Fusion + GLOBAL_QSS(#f0f0f0 배경/흰 GroupBox/#0096c8 제목) + 맑은 고딕 10pt
+  + L1 레이아웃(좌 ScrollArea 고정폭 + 우 탭) + 다이얼로그 버튼 한글화.
 - origin: github.com/terraloc01/G_RSim
 - 보안훅 오탐 회피: `app.exec` -> `getattr(app, "exec")`, em dash(—) 코드 문자열 금지,
   이진 직렬화 모듈명 문서 표기 금지
