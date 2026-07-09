@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+external/
+output/
+*.out
+*.in
+!examples/*.in
+logs/
+exports/
+build/
+dist/
+*.spec.bak
