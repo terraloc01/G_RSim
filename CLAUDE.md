@@ -1,4 +1,6 @@
-# G_RSim — GPR 시뮬레이터 (GPRSIM 계열)
+# G_RSim (Radar Simulation) — GPR 시뮬레이터 (GPRSIM 계열)
+
+> 프로젝트명 의미: **R Sim = Radar Simulation** (세중님, 2026-07-09)
 
 > ## 현재 상태 (2026-07-09 시즌01 — 프로젝트 신설 + MVP 완성)
 > - **목표**: GPR-SLICE 의 GPRSIM 같은 GPR 순방향 시뮬레이터.
