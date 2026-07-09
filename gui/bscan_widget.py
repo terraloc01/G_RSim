@@ -6,10 +6,11 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDoubleSpinBox,
-    QPushButton, QFileDialog, QMessageBox,
+    QPushButton, QFileDialog,
 )
 
 from config import C0
+from gui.style import kr_info
 
 GAIN_MODES = ["원본", "선형 t-게인", "AGC"]
 COLORMAPS = ["gray", "seismic", "viridis", "jet"]
@@ -108,7 +109,7 @@ class BScanWidget(QWidget):
 
     def _save_png(self):
         if self._data is None:
-            QMessageBox.information(self, "PNG 저장", "저장할 결과가 없습니다.")
+            kr_info(self, "PNG 저장", "저장할 결과가 없습니다.")
             return
         path, _ = QFileDialog.getSaveFileName(self, "B-scan PNG 저장", "bscan.png",
                                               "PNG 이미지 (*.png)")

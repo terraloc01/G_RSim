@@ -7,10 +7,11 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QGroupBox,
     QLabel, QComboBox, QDoubleSpinBox, QPushButton, QRadioButton, QButtonGroup,
-    QListWidget, QProgressBar, QTabWidget, QMessageBox, QCheckBox,
+    QListWidget, QProgressBar, QTabWidget, QCheckBox, QScrollArea, QSplitter,
 )
 
 from config import APP_NAME, APP_VERSION
+from gui.style import GLOBAL_QSS, kr_info, kr_warn, kr_question
 from core.model import (
     GPRModel, LayerObject, BoxObject, CylinderObject, MATERIAL_PRESETS,
 )
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} — GPR 시뮬레이터")
         self.resize(1280, 800)
+        self.setStyleSheet(GLOBAL_QSS)
 
         self._model = GPRModel()
         self._thread = None
@@ -74,16 +76,28 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         central = QWidget()
         root = QHBoxLayout(central)
+        root.setContentsMargins(6, 6, 6, 6)
         self.setCentralWidget(central)
 
-        root.addWidget(self._build_left_panel())
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # 좌측 설정 패널 — QScrollArea (카탈로그 L1 패턴)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self._build_left_panel())
+        scroll.setFixedWidth(320)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        splitter.addWidget(scroll)
 
         self._tabs = QTabWidget()
         self._canvas = ModelCanvas(self)
         self._bscan = BScanWidget(self)
-        self._tabs.addTab(self._canvas, " 모델 ")
-        self._tabs.addTab(self._bscan, " B-scan 결과 ")
-        root.addWidget(self._tabs, 1)
+        self._tabs.addTab(self._canvas, "  모델  ")
+        self._tabs.addTab(self._bscan, "  B-scan 결과  ")
+        splitter.addWidget(self._tabs)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        root.addWidget(splitter)
 
         self._canvas.box_drawn.connect(self._on_box_drawn)
         self._canvas.cylinder_drawn.connect(self._on_cyl_drawn)
@@ -91,8 +105,8 @@ class MainWindow(QMainWindow):
 
     def _build_left_panel(self) -> QWidget:
         panel = QWidget()
-        panel.setFixedWidth(320)
         lay = QVBoxLayout(panel)
+        lay.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         def dspin(lo, hi, val, step, dec=2, suffix=""):
             s = QDoubleSpinBox()
@@ -301,7 +315,7 @@ class MainWindow(QMainWindow):
     def _on_add_layer(self):
         top, bot = self._spn_ly_top.value(), self._spn_ly_bot.value()
         if bot <= top:
-            QMessageBox.warning(self, "층 추가", "하단 깊이는 상단 깊이보다 커야 합니다.")
+            kr_warn(self, "층 추가", "하단 깊이는 상단 깊이보다 커야 합니다.")
             return
         self._model.layers.append(LayerObject(top, bot, self._cmb_mat.currentData()))
         self._after_object_change()
@@ -351,16 +365,15 @@ class MainWindow(QMainWindow):
         self._sync_panel_to_model()
         errs = self._model.validate()
         if errs:
-            QMessageBox.warning(self, "모델 검증", "\n".join(errs))
+            kr_warn(self, "모델 검증", "\n".join(errs))
             return
         n = self._model.n_traces()
         nx = int(self._model.width / self._model.cell)
         ny = int((self._model.depth + self._model.air_height) / self._model.cell)
-        if nx * ny * n > 5_000_000_0:  # 대략적 경고 기준
-            ret = QMessageBox.question(
-                self, "대형 모델",
-                f"격자 {nx*ny:,} 셀 x {n} traces: 계산이 오래 걸릴 수 있습니다.\n계속할까요?")
-            if ret != QMessageBox.StandardButton.Yes:
+        if nx * ny * n > 50_000_000:  # 대략적 경고 기준
+            if not kr_question(
+                    self, "대형 모델",
+                    f"격자 {nx*ny:,} 셀 x {n} traces: 계산이 오래 걸릴 수 있습니다.\n계속할까요?"):
                 return
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -394,18 +407,18 @@ class MainWindow(QMainWindow):
         self._lbl_status.setText(msg)
         if not ok:
             if msg != "취소됨":
-                QMessageBox.warning(self, "시뮬레이션", msg)
+                kr_warn(self, "시뮬레이션", msg)
             return
         in_path = os.path.join(OUTPUT_DIR, "grsim_model.in")
         n = self._model.n_traces()
         try:
             data, dt = read_bscan(in_path, n)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, "결과 읽기 실패", str(exc))
+            kr_warn(self, "결과 읽기 실패", str(exc))
             return
         a = self._model.antenna
         mid_start = a.x_start + a.offset / 2.0
         self._bscan.set_data(data, dt, mid_start, a.step, self._model.background.epsilon_r)
         self._tabs.setCurrentWidget(self._bscan)
         self._prg.setValue(self._prg.maximum())
-        QMessageBox.information(self, "시뮬레이션", f"완료: {n} traces")
+        kr_info(self, "시뮬레이션", f"완료: {n} traces")

@@ -11,10 +11,11 @@ from config import FONT_FAMILY
 
 def main():
     app = QApplication(sys.argv)
-    app.setFont(QFont(FONT_FAMILY, 9))
+    app.setStyle("Fusion")
+    app.setFont(QFont(FONT_FAMILY, 10))
     from gui.main_window import MainWindow
     win = MainWindow()
-    win.show()
+    win.showMaximized()
     run_loop = getattr(app, "exec")
     sys.exit(run_loop())
 
