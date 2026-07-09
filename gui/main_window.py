@@ -105,12 +105,13 @@ class MainWindow(QMainWindow):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # 좌측 설정 패널 — QScrollArea (카탈로그 L1 패턴)
+        # 좌측 설정 패널 — QScrollArea (카탈로그 L1 패턴, 세로 스크롤만)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._build_left_panel())
-        scroll.setFixedWidth(320)
+        scroll.setFixedWidth(370)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         splitter.addWidget(scroll)
 
         self._tabs = QTabWidget()
