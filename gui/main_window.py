@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
             s.setDecimals(dec)
             if suffix:
                 s.setSuffix(suffix)
+            s.setMinimumWidth(70)   # 좁은 패널에서 축소 허용 (가로 스크롤 방지)
             return s
 
         # --- 예제/초기화 ---
@@ -179,6 +180,7 @@ class MainWindow(QMainWindow):
         f.addRow("Time window:", tw_row)
         self._lbl_cell_hint = QLabel("")
         self._lbl_cell_hint.setStyleSheet("color: #666;")
+        self._lbl_cell_hint.setWordWrap(True)
         f.addRow("", self._lbl_cell_hint)
         lay.addWidget(grp_dom)
 
@@ -188,7 +190,8 @@ class MainWindow(QMainWindow):
         self._spn_freq = dspin(10, 3000, 400, 50, 0, " MHz")
         self._spn_offset = dspin(0.0, 5, 0.1, 0.01, 3, " m")
         self._spn_step = dspin(0.005, 5, 0.1, 0.01, 3, " m")
-        self._chk_ant_auto = QCheckBox("스캔 범위 자동 (측선 전체)")
+        self._chk_ant_auto = QCheckBox("스캔 범위 자동")
+        self._chk_ant_auto.setToolTip("측선 전체를 PML 여유 포함해 자동 스캔")
         self._chk_ant_auto.setChecked(True)
         self._spn_xs = dspin(0.0, 500, 0.5, 0.1, 2, " m")
         self._spn_xe = dspin(0.0, 500, 9.5, 0.1, 2, " m")
@@ -210,11 +213,13 @@ class MainWindow(QMainWindow):
         for m in MATERIAL_PRESETS:
             self._cmb_bg.addItem(f"{m.name} (εr={m.epsilon_r:g})", m)
         self._cmb_bg.setCurrentIndex(1)
+        self._cmb_bg.setMinimumWidth(120)
         fr.addRow("배경 매질:", self._cmb_bg)
         self._cmb_mat = QComboBox()
         for m in MATERIAL_PRESETS:
             self._cmb_mat.addItem(f"{m.name} (εr={m.epsilon_r:g})", m)
         self._cmb_mat.setCurrentIndex(len(MATERIAL_PRESETS) - 1)  # 금속
+        self._cmb_mat.setMinimumWidth(120)
         fr.addRow("그리기 재질:", self._cmb_mat)
         v.addLayout(fr)
 
@@ -254,9 +259,11 @@ class MainWindow(QMainWindow):
         self._cmb_engine = QComboBox()
         self._cmb_engine.addItem("gprMax (FDTD 정밀, 분 단위)", "fdtd")
         self._cmb_engine.addItem("레이트레이싱 (근사, 1초 미만)", "ray")
+        self._cmb_engine.setMinimumWidth(120)
         eng_row.addRow("엔진:", self._cmb_engine)
         v.addLayout(eng_row)
-        self._chk_multiples = QCheckBox("다중반사 (RR) 포함 — 레이트레이싱 전용")
+        self._chk_multiples = QCheckBox("다중반사 (RR) 포함")
+        self._chk_multiples.setToolTip("레이트레이싱 전용 옵션 (층 반사의 2차 다중반사 추가)")
         self._chk_multiples.setEnabled(False)
         v.addWidget(self._chk_multiples)
         self._lbl_info = QLabel("")
