@@ -6,7 +6,7 @@ matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle, Circle
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 
 from config import FONT_FAMILY
 
@@ -45,6 +45,10 @@ class ModelCanvas(FigureCanvasQTAgg):
     def set_tool(self, tool: str):
         self._tool = tool
         self._press_xy = None
+        if tool in ("box", "cylinder"):
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_selected(self, kind, index):
         self._selected = (kind, index) if kind else None
@@ -99,6 +103,20 @@ class ModelCanvas(FigureCanvasQTAgg):
                                         facecolor="none", edgecolor="red", lw=1.6, ls="--"))
             except IndexError:
                 self._selected = None
+
+        # 빈 모델 사용 안내
+        if not (m.layers or m.boxes or m.cylinders):
+            ax.text(m.width / 2, m.depth * 0.45,
+                    "사용 순서\n\n"
+                    "① 좌측에서 측선 폭 / 깊이 / 주파수 / 배경 매질 설정\n"
+                    "② 그리기 재질 선택 후 [사각형]이나 [원형] 도구로\n"
+                    "     이 화면에 드래그하여 관로 / 공동 / 구조물 배치\n"
+                    "     ([층 추가]로 수평 지층도 가능)\n"
+                    "③ [시뮬레이션 실행] → B-scan 결과 탭에서 확인",
+                    ha="center", va="center", fontsize=12, color="#333333",
+                    linespacing=1.6,
+                    bbox=dict(boxstyle="round,pad=0.8", facecolor="white",
+                              edgecolor="#0096c8", alpha=0.9))
 
         # 지표선 + 안테나 스캔 범위
         ax.axhline(0, color="k", lw=1.2)

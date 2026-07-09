@@ -68,8 +68,12 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._sync_panel_to_model()
+        self._apply_autos()
         self._canvas.set_model(self._model)
         self._refresh_info()
+        self.statusBar().showMessage(
+            "① 좌측 설정 → ② 캔버스에 객체 그리기 → ③ 시뮬레이션 실행   "
+            "(처음이면 [예제 모델] 버튼으로 바로 체험해 보세요)")
 
     # ------------------------------------------------------------------ UI
 
@@ -118,12 +122,27 @@ class MainWindow(QMainWindow):
                 s.setSuffix(suffix)
             return s
 
+        # --- 예제/초기화 ---
+        ex_row = QHBoxLayout()
+        self._btn_example = QPushButton("예제 모델")
+        self._btn_example.setToolTip("관로/공동/지층이 배치된 예제를 불러옵니다")
+        self._btn_reset = QPushButton("모델 초기화")
+        ex_row.addWidget(self._btn_example)
+        ex_row.addWidget(self._btn_reset)
+        lay.addLayout(ex_row)
+
         # --- 도메인 ---
         grp_dom = QGroupBox("도메인")
         f = QFormLayout(grp_dom)
         self._spn_width = dspin(0.5, 500, 10.0, 0.5, 2, " m")
         self._spn_depth = dspin(0.2, 50, 3.0, 0.5, 2, " m")
+        self._chk_cell_auto = QCheckBox("자동")
+        self._chk_cell_auto.setChecked(True)
         self._spn_cell = dspin(0.001, 0.5, 0.01, 0.005, 4, " m")
+        self._spn_cell.setEnabled(False)
+        cell_row = QHBoxLayout()
+        cell_row.addWidget(self._spn_cell)
+        cell_row.addWidget(self._chk_cell_auto)
         self._spn_air = dspin(0.05, 5, 0.2, 0.05, 2, " m")
         self._chk_tw_auto = QCheckBox("자동")
         self._chk_tw_auto.setChecked(True)
@@ -134,7 +153,7 @@ class MainWindow(QMainWindow):
         tw_row.addWidget(self._chk_tw_auto)
         f.addRow("측선 폭:", self._spn_width)
         f.addRow("깊이:", self._spn_depth)
-        f.addRow("셀 크기:", self._spn_cell)
+        f.addRow("셀 크기:", cell_row)
         f.addRow("공기층:", self._spn_air)
         f.addRow("Time window:", tw_row)
         self._lbl_cell_hint = QLabel("")
@@ -147,12 +166,17 @@ class MainWindow(QMainWindow):
         f = QFormLayout(grp_ant)
         self._spn_freq = dspin(10, 3000, 400, 50, 0, " MHz")
         self._spn_offset = dspin(0.0, 5, 0.1, 0.01, 3, " m")
-        self._spn_step = dspin(0.005, 5, 0.05, 0.01, 3, " m")
+        self._spn_step = dspin(0.005, 5, 0.1, 0.01, 3, " m")
+        self._chk_ant_auto = QCheckBox("스캔 범위 자동 (측선 전체)")
+        self._chk_ant_auto.setChecked(True)
         self._spn_xs = dspin(0.0, 500, 0.5, 0.1, 2, " m")
         self._spn_xe = dspin(0.0, 500, 9.5, 0.1, 2, " m")
+        self._spn_xs.setEnabled(False)
+        self._spn_xe.setEnabled(False)
         f.addRow("중심 주파수:", self._spn_freq)
         f.addRow("TX-RX 간격:", self._spn_offset)
         f.addRow("Trace 간격:", self._spn_step)
+        f.addRow("", self._chk_ant_auto)
         f.addRow("시작 위치:", self._spn_xs)
         f.addRow("끝 위치:", self._spn_xe)
         lay.addWidget(grp_ant)
@@ -231,10 +255,17 @@ class MainWindow(QMainWindow):
                   self._spn_xs, self._spn_xe):
             s.valueChanged.connect(self._on_param_changed)
         self._chk_tw_auto.toggled.connect(self._on_tw_auto)
+        self._chk_cell_auto.toggled.connect(self._on_cell_auto)
+        self._chk_ant_auto.toggled.connect(self._on_ant_auto)
         self._cmb_bg.currentIndexChanged.connect(self._on_param_changed)
-        self._rb_select.toggled.connect(lambda on: on and self._canvas.set_tool("select"))
-        self._rb_box.toggled.connect(lambda on: on and self._canvas.set_tool("box"))
-        self._rb_cyl.toggled.connect(lambda on: on and self._canvas.set_tool("cylinder"))
+        self._btn_example.clicked.connect(self._on_example)
+        self._btn_reset.clicked.connect(self._on_reset_model)
+        self._rb_select.toggled.connect(lambda on: on and self._set_tool(
+            "select", "선택 도구: 캔버스에서 객체를 클릭해 선택하고, [선택 객체 삭제]로 제거합니다"))
+        self._rb_box.toggled.connect(lambda on: on and self._set_tool(
+            "box", "사각형 도구: 캔버스에서 대각선으로 드래그하면 '그리기 재질'로 사각 객체가 배치됩니다"))
+        self._rb_cyl.toggled.connect(lambda on: on and self._set_tool(
+            "cylinder", "원형 도구: 중심에서 바깥으로 드래그하면 관로/공동 같은 원형 객체가 배치됩니다"))
         self._btn_add_layer.clicked.connect(self._on_add_layer)
         self._btn_del.clicked.connect(self._on_delete_object)
         self._lst_objects.currentRowChanged.connect(self._on_list_selected)
@@ -261,12 +292,42 @@ class MainWindow(QMainWindow):
 
     def _on_param_changed(self):
         self._sync_panel_to_model()
+        self._apply_autos()
         self._canvas.redraw()
         self._refresh_info()
+
+    def _apply_autos(self):
+        """자동 체크된 항목(셀 크기/안테나 범위)을 모델+스핀박스에 반영."""
+        m = self._model
+        if self._chk_cell_auto.isChecked():
+            m.cell = m.nice_cell()
+            self._spn_cell.blockSignals(True)
+            self._spn_cell.setValue(m.cell)
+            self._spn_cell.blockSignals(False)
+        if self._chk_ant_auto.isChecked():
+            xs, xe = m.auto_antenna_range()
+            m.antenna.x_start, m.antenna.x_end = xs, xe
+            for spn, v in ((self._spn_xs, xs), (self._spn_xe, xe)):
+                spn.blockSignals(True)
+                spn.setValue(v)
+                spn.blockSignals(False)
 
     def _on_tw_auto(self, checked):
         self._spn_tw.setEnabled(not checked)
         self._on_param_changed()
+
+    def _on_cell_auto(self, checked):
+        self._spn_cell.setEnabled(not checked)
+        self._on_param_changed()
+
+    def _on_ant_auto(self, checked):
+        self._spn_xs.setEnabled(not checked)
+        self._spn_xe.setEnabled(not checked)
+        self._on_param_changed()
+
+    def _set_tool(self, tool, hint):
+        self._canvas.set_tool(tool)
+        self.statusBar().showMessage(hint)
 
     def _refresh_info(self):
         m = self._model
@@ -322,8 +383,51 @@ class MainWindow(QMainWindow):
 
     def _after_object_change(self):
         self._refresh_object_list()
+        self._apply_autos()      # 객체 재질이 최대 εr(권장 셀/TW)에 영향
         self._canvas.redraw()
         self._refresh_info()
+
+    def _on_example(self):
+        """원클릭 예제: 관로 + 공동 + 하부 지층."""
+        mats = {mm.name: mm for mm in MATERIAL_PRESETS}
+        for spn, v in ((self._spn_width, 6.0), (self._spn_depth, 2.5),
+                       (self._spn_freq, 400), (self._spn_step, 0.1),
+                       (self._spn_offset, 0.1), (self._spn_air, 0.2)):
+            spn.blockSignals(True)
+            spn.setValue(v)
+            spn.blockSignals(False)
+        self._cmb_bg.blockSignals(True)
+        self._cmb_bg.setCurrentIndex(1)  # 건조 모래
+        self._cmb_bg.blockSignals(False)
+        m = self._model
+        m.layers.clear()
+        m.boxes.clear()
+        m.cylinders.clear()
+        m.layers.append(LayerObject(1.6, 2.5, mats["석회암"]))
+        m.cylinders.append(CylinderObject(1.5, 0.6, 0.10, mats["금속 (PEC)"]))
+        m.cylinders.append(CylinderObject(3.0, 0.9, 0.15, mats["공기"]))
+        m.boxes.append(BoxObject(4.2, 0.4, 4.8, 1.0, mats["콘크리트"]))
+        self._selected = None
+        self._canvas.set_selected("", -1)
+        self._sync_panel_to_model()
+        self._apply_autos()
+        self._refresh_object_list()
+        self._canvas.redraw()
+        self._refresh_info()
+        self.statusBar().showMessage(
+            "예제 모델 로드 완료 (금속관/공동/콘크리트/하부암반). [시뮬레이션 실행]을 눌러 보세요")
+
+    def _on_reset_model(self):
+        m = self._model
+        if (m.layers or m.boxes or m.cylinders) and not kr_question(
+                self, "모델 초기화", "배치된 객체를 모두 삭제할까요?"):
+            return
+        m.layers.clear()
+        m.boxes.clear()
+        m.cylinders.clear()
+        self._selected = None
+        self._canvas.set_selected("", -1)
+        self._after_object_change()
 
     def _on_object_clicked(self, kind, index):
         self._selected = (kind, index) if kind else None

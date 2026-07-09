@@ -87,7 +87,7 @@ class CylinderObject:
 class AntennaConfig:
     freq_mhz: float = 400.0     # 중심 주파수 (Ricker)
     offset: float = 0.1         # TX-RX 간격 (m)
-    step: float = 0.05          # trace 간격 (m)
+    step: float = 0.1           # trace 간격 (m)
     x_start: float = 0.5        # 첫 TX 위치 (m)
     x_end: float = 9.5          # 마지막 RX 허용 위치 (m)
 
@@ -128,6 +128,23 @@ class GPRModel:
         f_max = self.antenna.freq_mhz * 1e6 * 2.5
         v = C0 / (self.max_epsilon() ** 0.5)
         return v / f_max / 10.0
+
+    def nice_cell(self) -> float:
+        """권장 셀 이하의 '깔끔한' 값 (1/2/2.5/5 x 10^k)."""
+        target = self.suggest_cell()
+        k = 1.0
+        while k > target:
+            k /= 10.0
+        best = k
+        for m in (2.0, 2.5, 5.0):
+            if k * m <= target:
+                best = k * m
+        return max(best, 0.001)
+
+    def auto_antenna_range(self) -> tuple:
+        """PML(10셀) + 여유 2셀을 피한 측선 전체 스캔 범위 (x_start, x_end)."""
+        margin = 12 * self.cell
+        return (round(margin, 3), round(self.width - margin, 3))
 
     def n_traces(self) -> int:
         a = self.antenna
